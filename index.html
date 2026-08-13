@@ -1,0 +1,1597 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Superstore Sales Dashboard</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              500: '#0284c7',
+              600: '#0284c7',
+              700: '#0369a1',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- PapaParse for CSV Parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.05);
+    }
+    .dark ::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.05);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(156, 163, 175, 0.5);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(107, 114, 128, 0.8);
+    }
+    
+    .chart-container {
+      position: relative;
+      width: 100%;
+      height: 320px;
+    }
+
+    /* Soft pulse loading animation */
+    @keyframes pulse-subtle {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .animate-pulse-subtle {
+      animation: pulse-subtle 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-200">
+
+  <div class="flex h-screen overflow-hidden">
+
+    <!-- Mini Sidebar -->
+    <aside class="w-16 md:w-20 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700/60 flex flex-col justify-between items-center py-5 z-20 shadow-sm shrink-0">
+      
+      <!-- Top Brand Icon & Nav -->
+      <div class="flex flex-col items-center gap-8 w-full">
+        <!-- Logo Icon -->
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+          <i class="fa-solid fa-chart-line text-lg"></i>
+        </div>
+
+        <!-- Navigation Buttons -->
+        <nav class="flex flex-col gap-4 w-full px-2">
+          <!-- Sales Nav Button -->
+          <button id="nav-sales" onclick="switchSection('sales')" class="nav-btn group relative flex items-center justify-center p-3 rounded-xl transition-all text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-slate-700/70" title="Sales Analytics">
+            <i class="fa-solid fa-chart-pie text-lg"></i>
+            <span class="absolute left-full ml-3 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap shadow-lg">Sales View</span>
+          </button>
+
+          <!-- Product Nav Button -->
+          <button id="nav-product" onclick="switchSection('product')" class="nav-btn group relative flex items-center justify-center p-3 rounded-xl transition-all text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/50" title="Product Analytics">
+            <i class="fa-solid fa-box text-lg"></i>
+            <span class="absolute left-full ml-3 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap shadow-lg">Product View</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Bottom Controls -->
+      <div class="flex flex-col items-center gap-4 w-full px-2">
+        <!-- Data Reload Button -->
+        <button onclick="fetchData()" class="group relative flex items-center justify-center p-3 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-all" title="Reload Dataset">
+          <i id="reload-icon" class="fa-solid fa-arrows-rotate text-base"></i>
+          <span class="absolute left-full ml-3 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap shadow-lg">Refresh Data</span>
+        </button>
+
+        <!-- Light/Dark Mode Switch -->
+        <button id="theme-toggle" onclick="toggleTheme()" class="group relative flex items-center justify-center p-3 rounded-xl text-slate-400 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-all" title="Toggle Light/Dark Theme">
+          <i id="theme-icon" class="fa-solid fa-sun text-lg"></i>
+          <span class="absolute left-full ml-3 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap shadow-lg">Toggle Theme</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+      
+      <!-- Top Header -->
+      <header class="h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700/60 px-6 flex items-center justify-between shrink-0 z-10 shadow-sm">
+        <div class="flex items-center gap-4">
+          <div class="flex flex-col">
+            <h1 class="text-base font-bold text-slate-900 dark:text-white leading-tight flex items-center gap-2">
+              <span>Superstore Sales Dashboard</span>
+            </h1>
+            <p id="section-subtitle" class="text-xs text-blue-600 dark:text-blue-400 font-medium">Sales Overview & Insights</p>
+          </div>
+        </div>
+
+        <!-- Global Header Controls -->
+        <div class="flex items-center gap-3">
+          <!-- Country Filter -->
+          <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-700/60 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600">
+            <i class="fa-solid fa-earth-americas text-xs text-slate-400"></i>
+            <label for="country-filter" class="text-xs font-medium text-slate-500 dark:text-slate-300">Country:</label>
+            <select id="country-filter" onchange="onHeaderCountryChange()" class="bg-transparent text-xs font-semibold text-slate-800 dark:text-white focus:outline-none cursor-pointer pr-1">
+              <option value="All" class="bg-white dark:bg-slate-800">All Countries</option>
+            </select>
+          </div>
+
+          <!-- Year Filter -->
+          <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-700/60 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600">
+            <i class="fa-regular fa-calendar text-xs text-slate-400"></i>
+            <label for="year-filter" class="text-xs font-medium text-slate-500 dark:text-slate-300">Year:</label>
+            <select id="year-filter" onchange="applyFilters()" class="bg-transparent text-xs font-semibold text-slate-800 dark:text-white focus:outline-none cursor-pointer pr-1">
+              <option value="All" class="bg-white dark:bg-slate-800">All Years</option>
+            </select>
+          </div>
+
+          <!-- Dataset Status Indicator -->
+          <div id="data-status-badge" class="hidden md:flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span id="data-count-label">0 Records</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Scrollable Main View -->
+      <main id="main-content" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+
+        <!-- Loading State Overlay -->
+        <div id="loading-spinner" class="flex flex-col items-center justify-center py-20 space-y-4">
+          <div class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Fetching Superstore dataset from Google Sheets...</p>
+        </div>
+
+        <!-- Active Cross-Filters Indicator Banner -->
+        <div id="active-filters-bar" class="hidden flex flex-wrap items-center gap-2 bg-blue-50/80 dark:bg-slate-800/80 p-3 rounded-2xl border border-blue-200/80 dark:border-slate-700/80 shadow-sm transition-all">
+          <span class="text-xs font-bold text-blue-900 dark:text-blue-300 flex items-center gap-1.5 mr-1">
+            <i class="fa-solid fa-filter text-blue-600 dark:text-blue-400"></i> Active Chart Filters:
+          </span>
+          <div id="filter-chips-container" class="flex flex-wrap items-center gap-2">
+            <!-- Chips rendered via JS -->
+          </div>
+          <button onclick="clearAllFilters()" class="ml-auto text-xs font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 bg-rose-50 dark:bg-rose-950/40 px-2.5 py-1 rounded-lg border border-rose-200 dark:border-rose-800 transition-colors flex items-center gap-1">
+            <i class="fa-solid fa-xmark text-xs"></i> Clear All
+          </button>
+        </div>
+
+        <!-- ==================== SALES SECTION ==================== -->
+        <div id="sales-section" class="space-y-6 hidden">
+          
+          <!-- Sales Metric Cards -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Card 1: Total Sales -->
+            <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex items-center justify-between">
+              <div>
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Total Sales</p>
+                <h3 id="sales-card-total" class="text-2xl font-bold text-slate-900 dark:text-white mt-1">$0.00</h3>
+                <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 mt-1">
+                  <i class="fa-solid fa-arrow-trend-up text-[10px]"></i> Gross Revenue
+                </span>
+              </div>
+              <div class="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xl">
+                <i class="fa-solid fa-dollar-sign"></i>
+              </div>
+            </div>
+
+            <!-- Card 2: Total Profits -->
+            <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex items-center justify-between">
+              <div>
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Total Profits</p>
+                <h3 id="sales-card-profit" class="text-2xl font-bold text-slate-900 dark:text-white mt-1">$0.00</h3>
+                <span id="sales-profit-margin" class="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 mt-1">
+                  Margin: 0.0%
+                </span>
+              </div>
+              <div class="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl">
+                <i class="fa-solid fa-wallet"></i>
+              </div>
+            </div>
+
+            <!-- Card 3: Total Customers -->
+            <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex items-center justify-between">
+              <div>
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Unique Customers</p>
+                <h3 id="sales-card-customers" class="text-2xl font-bold text-slate-900 dark:text-white mt-1">0</h3>
+                <span class="text-[11px] text-purple-600 dark:text-purple-400 font-medium flex items-center gap-1 mt-1">
+                  <i class="fa-solid fa-users text-[10px]"></i> Active Buyers
+                </span>
+              </div>
+              <div class="w-12 h-12 rounded-xl bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xl">
+                <i class="fa-solid fa-user-group"></i>
+              </div>
+            </div>
+
+            <!-- Card 4: Total Orders -->
+            <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex items-center justify-between">
+              <div>
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Unique Orders</p>
+                <h3 id="sales-card-orders" class="text-2xl font-bold text-slate-900 dark:text-white mt-1">0</h3>
+                <span class="text-[11px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1 mt-1">
+                  <i class="fa-solid fa-receipt text-[10px]"></i> Completed Orders
+                </span>
+              </div>
+              <div class="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xl">
+                <i class="fa-solid fa-cart-shopping"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Charts Row 1: Drilldown Bar Chart + Segment Donut -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Bar Chart: Total Sales by Location (Drilldown) -->
+            <div class="lg:col-span-2 bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex flex-col justify-between">
+              <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <div>
+                  <h4 id="geo-chart-title" class="text-base font-bold text-slate-900 dark:text-white">Sales by Country</h4>
+                  <p class="text-xs text-slate-400">Click a bar to drill down (Country &rarr; State &rarr; City)</p>
+                </div>
+                
+                <!-- Drilldown Breadcrumbs & Reset -->
+                <div class="flex items-center gap-2">
+                  <span id="geo-breadcrumb" class="text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-2.5 py-1 rounded-lg border border-blue-200 dark:border-blue-800">
+                    Country View
+                  </span>
+                  <button id="geo-reset-btn" onclick="resetGeoDrilldown()" class="hidden text-xs px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg transition-colors flex items-center gap-1">
+                    <i class="fa-solid fa-rotate-left"></i> Reset
+                  </button>
+                </div>
+              </div>
+
+              <div class="chart-container">
+                <canvas id="chart-sales-geo"></canvas>
+              </div>
+            </div>
+
+            <!-- Donut Chart: Sales by Segment -->
+            <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex flex-col justify-between">
+              <div class="mb-4">
+                <h4 class="text-base font-bold text-slate-900 dark:text-white">Sales by Segment</h4>
+                <p class="text-xs text-slate-400">Distribution across customer segments</p>
+              </div>
+              <div class="chart-container flex items-center justify-center">
+                <canvas id="chart-sales-segment"></canvas>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Charts Row 2: Sales Over Time Line Chart -->
+          <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <h4 class="text-base font-bold text-slate-900 dark:text-white">Total Sales Over Time</h4>
+                <p class="text-xs text-slate-400">Historical trend analysis</p>
+              </div>
+
+              <!-- Time Granularity Selector -->
+              <div class="flex items-center bg-slate-100 dark:bg-slate-700/60 p-1 rounded-xl border border-slate-200 dark:border-slate-600 text-xs">
+                <button id="sales-time-month" onclick="setSalesTimeframe('month')" class="px-3 py-1.5 rounded-lg font-medium transition-all bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm">
+                  Monthly
+                </button>
+                <button id="sales-time-year" onclick="setSalesTimeframe('year')" class="px-3 py-1.5 rounded-lg font-medium transition-all text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white">
+                  Yearly
+                </button>
+              </div>
+            </div>
+
+            <div class="chart-container">
+              <canvas id="chart-sales-time"></canvas>
+            </div>
+          </div>
+
+        </div>
+
+
+        <!-- ==================== PRODUCT SECTION ==================== -->
+        <div id="product-section" class="space-y-6 hidden">
+          
+          <!-- Product Metric Cards -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Card 1: Unique Products -->
+            <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex items-center justify-between">
+              <div>
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Unique Products</p>
+                <h3 id="product-card-unique" class="text-2xl font-bold text-slate-900 dark:text-white mt-1">0</h3>
+                <span class="text-[11px] text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1 mt-1">
+                  <i class="fa-solid fa-boxes-stacked text-[10px]"></i> Active Catalog
+                </span>
+              </div>
+              <div class="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xl">
+                <i class="fa-solid fa-tag"></i>
+              </div>
+            </div>
+
+            <!-- Card 2: Total Quantity Sold -->
+            <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex items-center justify-between">
+              <div>
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Total Quantity Sold</p>
+                <h3 id="product-card-qty" class="text-2xl font-bold text-slate-900 dark:text-white mt-1">0</h3>
+                <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 mt-1">
+                  <i class="fa-solid fa-truck-ramp-box text-[10px]"></i> Units Shipped
+                </span>
+              </div>
+              <div class="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl">
+                <i class="fa-solid fa-cubes"></i>
+              </div>
+            </div>
+
+            <!-- Card 3: Top Category -->
+            <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex items-center justify-between">
+              <div>
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Top Category</p>
+                <h3 id="product-card-top-cat" class="text-lg font-bold text-slate-900 dark:text-white mt-1 truncate max-w-[150px]">-</h3>
+                <span id="product-card-top-cat-sales" class="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium flex items-center gap-1 mt-1">
+                  $0.00
+                </span>
+              </div>
+              <div class="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl">
+                <i class="fa-solid fa-crown"></i>
+              </div>
+            </div>
+
+            <!-- Card 4: Avg Profit per Product -->
+            <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex items-center justify-between">
+              <div>
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Avg Profit / Unit</p>
+                <h3 id="product-card-avg-profit" class="text-2xl font-bold text-slate-900 dark:text-white mt-1">$0.00</h3>
+                <span class="text-[11px] text-teal-600 dark:text-teal-400 font-medium flex items-center gap-1 mt-1">
+                  Per Item Average
+                </span>
+              </div>
+              <div class="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 flex items-center justify-center text-xl">
+                <i class="fa-solid fa-chart-simple"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Product Charts Row 1: Category Drilldown Donut + Quantity Line Chart -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            <!-- Category Donut Chart (Drilldown to Sub-Category) -->
+            <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex flex-col justify-between">
+              <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <div>
+                  <h4 id="cat-chart-title" class="text-base font-bold text-slate-900 dark:text-white">Sales by Product Category</h4>
+                  <p class="text-xs text-slate-400">Click a category segment to view sub-categories</p>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                  <span id="cat-breadcrumb" class="text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-2.5 py-1 rounded-lg border border-blue-200 dark:border-blue-800">
+                    Category View
+                  </span>
+                  <button id="cat-reset-btn" onclick="resetCategoryDrilldown()" class="hidden text-xs px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg transition-colors flex items-center gap-1">
+                    <i class="fa-solid fa-rotate-left"></i> Reset
+                  </button>
+                </div>
+              </div>
+
+              <div class="chart-container flex items-center justify-center">
+                <canvas id="chart-product-category"></canvas>
+              </div>
+            </div>
+
+            <!-- Quantity Line Chart -->
+            <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex flex-col justify-between">
+              <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div>
+                  <h4 class="text-base font-bold text-slate-900 dark:text-white">Quantity Sold Over Time</h4>
+                  <p class="text-xs text-slate-400">Unit volume dynamic trend</p>
+                </div>
+
+                <!-- Time Granularity Selector -->
+                <div class="flex items-center bg-slate-100 dark:bg-slate-700/60 p-1 rounded-xl border border-slate-200 dark:border-slate-600 text-xs">
+                  <button id="qty-time-month" onclick="setQtyTimeframe('month')" class="px-3 py-1.5 rounded-lg font-medium transition-all bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm">
+                    Monthly
+                  </button>
+                  <button id="qty-time-year" onclick="setQtyTimeframe('year')" class="px-3 py-1.5 rounded-lg font-medium transition-all text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white">
+                    Yearly
+                  </button>
+                </div>
+              </div>
+
+              <div class="chart-container">
+                <canvas id="chart-product-quantity"></canvas>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Product Table Section -->
+          <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h4 class="text-base font-bold text-slate-900 dark:text-white">Product Performance Details</h4>
+                <p class="text-xs text-slate-400">Sales, Quantity, and Profit by Product</p>
+              </div>
+
+              <!-- Search Bar -->
+              <div class="relative w-full sm:w-64">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
+                <input id="product-search" type="text" oninput="handleProductSearch()" placeholder="Search product name..." class="w-full bg-slate-100 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 text-xs text-slate-800 dark:text-white pl-9 pr-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+              </div>
+            </div>
+
+            <!-- Scrollable Table -->
+            <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+              <table class="w-full text-xs text-left text-slate-600 dark:text-slate-300">
+                <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-200 uppercase tracking-wider font-semibold border-b border-slate-200 dark:border-slate-700">
+                  <tr>
+                    <th scope="col" class="px-4 py-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700" onclick="sortProductTable('name')">
+                      Product Name <i id="sort-icon-name" class="fa-solid fa-sort text-[10px] ml-1"></i>
+                    </th>
+                    <th scope="col" class="px-4 py-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 text-right" onclick="sortProductTable('sales')">
+                      Sales <i id="sort-icon-sales" class="fa-solid fa-sort text-[10px] ml-1"></i>
+                    </th>
+                    <th scope="col" class="px-4 py-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 text-right" onclick="sortProductTable('quantity')">
+                      Quantity <i id="sort-icon-quantity" class="fa-solid fa-sort text-[10px] ml-1"></i>
+                    </th>
+                    <th scope="col" class="px-4 py-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 text-right" onclick="sortProductTable('profit')">
+                      Profit <i id="sort-icon-profit" class="fa-solid fa-sort text-[10px] ml-1"></i>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody id="product-table-body" class="divide-y divide-slate-100 dark:divide-slate-700/60">
+                  <!-- JS Rendered rows -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Table Pagination & Info -->
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400 pt-2">
+              <span id="product-table-info">Showing 0 to 0 of 0 entries</span>
+              <div class="flex items-center gap-2">
+                <button id="btn-prev-page" onclick="changeTablePage(-1)" class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                  Previous
+                </button>
+                <span id="table-page-num" class="font-semibold text-slate-700 dark:text-slate-300">Page 1</span>
+                <button id="btn-next-page" onclick="changeTablePage(1)" class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script>
+    // CSV Endpoint
+    const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRvlxColIJow7JZlTALlEARRv0Y_kXwBccf0YlGFI8unbFBXlKn1LapJr4Rc11WIME9X0glMujn-H1Z/pub?output=csv";
+
+    // Application Global State
+    let rawData = [];
+    let filteredData = [];
+    let currentSection = 'sales';
+
+    // Global Filter Variables (Interactive Cross-filtering)
+    let selectedYear = 'All';
+    let selectedCountry = 'All';
+    let selectedSegment = 'All';
+    let selectedCategory = 'All';
+    let selectedSubCategory = 'All';
+    let selectedTimePeriod = 'All'; // Stores month or year string selected from charts
+
+    // Chart Timeframe toggles
+    let salesTimeframe = 'month'; // 'month' or 'year'
+    let qtyTimeframe = 'month';   // 'month' or 'year'
+
+    // Geo Drilldown state: level 0 = Country, level 1 = State, level 2 = City
+    let geoDrillState = {
+      level: 'country',
+      country: null,
+      state: null
+    };
+
+    // Category Drilldown state: level 0 = Category, level 1 = Sub-Category
+    let catDrillState = {
+      level: 'category',
+      category: null
+    };
+
+    // Product Table state
+    let tableSearchQuery = '';
+    let tableSortColumn = 'sales';
+    let tableSortDirection = 'desc'; // 'asc' or 'desc'
+    let tableCurrentPage = 1;
+    const tablePageSize = 10;
+
+    // Chart Instances Container
+    const charts = {
+      salesGeo: null,
+      salesSegment: null,
+      salesTime: null,
+      productCategory: null,
+      productQuantity: null
+    };
+
+    // Color Palettes
+    const PALETTE = [
+      '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', 
+      '#06b6d4', '#84cc16', '#f97316', '#6366f1', '#14b8a6'
+    ];
+
+    // Initialize application on page load
+    window.onload = function() {
+      initTheme();
+      fetchData();
+    };
+
+    // Theme Management
+    function initTheme() {
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark');
+        updateThemeIcon(true);
+      } else {
+        document.documentElement.classList.remove('dark');
+        updateThemeIcon(false);
+      }
+    }
+
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      updateThemeIcon(isDark);
+      // Refresh chart colors for current theme
+      updateAllCharts();
+    }
+
+    function updateThemeIcon(isDark) {
+      const icon = document.getElementById('theme-icon');
+      if (isDark) {
+        icon.className = 'fa-solid fa-sun text-lg text-amber-400';
+      } else {
+        icon.className = 'fa-solid fa-moon text-lg text-slate-600';
+      }
+    }
+
+    function fetchData() {
+      const spinner = document.getElementById('loading-spinner');
+      const reloadIcon = document.getElementById('reload-icon');
+      
+      spinner.classList.remove('hidden');
+      if (reloadIcon) reloadIcon.classList.add('animate-spin');
+
+      // Check if running inside Google Apps Script Web App environment
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(data) {
+            if (reloadIcon) reloadIcon.classList.remove('animate-spin');
+            spinner.classList.add('hidden');
+            if (data && data.length > 0) {
+              processParsedData(data);
+            } else {
+              loadFallbackData();
+            }
+          })
+          .withFailureHandler(function(err) {
+            console.warn("Apps Script call failed, falling back to CSV fetch:", err);
+            fetchFromCsvUrl(spinner, reloadIcon);
+          })
+          .getSpreadsheetData();
+      } else {
+        fetchFromCsvUrl(spinner, reloadIcon);
+      }
+    }
+
+    function fetchFromCsvUrl(spinner, reloadIcon) {
+      Papa.parse(CSV_URL, {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          if (reloadIcon) reloadIcon.classList.remove('animate-spin');
+          spinner.classList.add('hidden');
+
+          if (results.data && results.data.length > 0) {
+            processParsedData(results.data);
+          } else {
+            console.warn("CSV load yielded empty results, loading fallback data...");
+            loadFallbackData();
+          }
+        },
+        error: function(err) {
+          console.error("CSV Fetch Error:", err);
+          if (reloadIcon) reloadIcon.classList.remove('animate-spin');
+          spinner.classList.add('hidden');
+          loadFallbackData();
+        }
+      });
+    }
+
+    function processParsedData(data) {
+      // Normalize dataset properties regardless of exact column names in CSV
+      rawData = data.map(row => {
+        const getVal = (keys) => {
+          for (let k of keys) {
+            if (row[k] !== undefined) return row[k];
+            // case-insensitive search
+            const foundKey = Object.keys(row).find(rk => rk.trim().toLowerCase() === k.toLowerCase());
+            if (foundKey) return row[foundKey];
+          }
+          return '';
+        };
+
+        const rawDate = getVal(['Order Date', 'OrderDate', 'Date', 'order_date']);
+        let parsedDate = new Date(rawDate);
+        if (isNaN(parsedDate.getTime())) {
+          // try parsing format MM/DD/YYYY or DD/MM/YYYY
+          const parts = String(rawDate).split(/[\/\-]/);
+          if (parts.length === 3) {
+            parsedDate = new Date(parts[2], parts[0] - 1, parts[1]);
+          }
+        }
+        
+        const year = !isNaN(parsedDate.getTime()) ? parsedDate.getFullYear() : '2017';
+        const month = !isNaN(parsedDate.getTime()) ? String(parsedDate.getMonth() + 1).padStart(2, '0') : '01';
+        const yearMonth = `${year}-${month}`;
+
+        const parseNum = (v) => {
+          if (!v) return 0;
+          const cleaned = String(v).replace(/[\$,]/g, '').trim();
+          const n = parseFloat(cleaned);
+          return isNaN(n) ? 0 : n;
+        };
+
+        return {
+          orderId: getVal(['Order ID', 'OrderID', 'Order_ID']),
+          orderDate: parsedDate,
+          year: String(year),
+          yearMonth: yearMonth,
+          country: getVal(['Country', 'country']) || 'United States',
+          state: getVal(['State', 'state']) || 'Unknown State',
+          city: getVal(['City', 'city']) || 'Unknown City',
+          segment: getVal(['Segment', 'segment']) || 'Consumer',
+          category: getVal(['Category', 'category']) || 'Technology',
+          subCategory: getVal(['Sub-Category', 'SubCategory', 'sub_category']) || 'Accessories',
+          productName: getVal(['Product Name', 'ProductName', 'product_name']) || 'Generic Item',
+          customerId: getVal(['Customer ID', 'CustomerID', 'Customer_ID', 'Customer Name']) || 'CUST-00',
+          sales: parseNum(getVal(['Sales', 'sales'])),
+          quantity: Math.round(parseNum(getVal(['Quantity', 'quantity']))),
+          profit: parseNum(getVal(['Profit', 'profit']))
+        };
+      }).filter(r => r.sales > 0 || r.quantity > 0 || r.profit !== 0);
+
+      // Populate Header Dropdowns dynamically
+      populateYearDropdown();
+      populateCountryDropdown();
+
+      // Show Badge
+      const statusBadge = document.getElementById('data-status-badge');
+      const countLabel = document.getElementById('data-count-label');
+      if (statusBadge && countLabel) {
+        statusBadge.classList.remove('hidden');
+        countLabel.textContent = `${rawData.length.toLocaleString()} Records`;
+      }
+
+      // Initial filter apply and UI display
+      applyFilters();
+
+      // Show current active section
+      switchSection(currentSection);
+    }
+
+    function loadFallbackData() {
+      const sampleYears = ['2014', '2015', '2016', '2017'];
+      const sampleSegments = ['Consumer', 'Corporate', 'Home Office'];
+      const sampleCategories = {
+        'Technology': ['Phones', 'Accessories', 'Machines', 'Copiers'],
+        'Furniture': ['Chairs', 'Tables', 'Bookcases', 'Furnishings'],
+        'Office Supplies': ['Storage', 'Paper', 'Binders', 'Art', 'Fasteners']
+      };
+      const sampleLocations = [
+        { country: 'United States', state: 'California', city: 'Los Angeles' },
+        { country: 'United States', state: 'California', city: 'San Francisco' },
+        { country: 'United States', state: 'New York', city: 'New York City' },
+        { country: 'United States', state: 'Texas', city: 'Houston' },
+        { country: 'United States', state: 'Washington', city: 'Seattle' },
+        { country: 'Canada', state: 'Ontario', city: 'Toronto' }
+      ];
+
+      const generated = [];
+      for (let i = 0; i < 250; i++) {
+        const year = sampleYears[Math.floor(Math.random() * sampleYears.length)];
+        const monthNum = Math.floor(Math.random() * 12) + 1;
+        const monthStr = String(monthNum).padStart(2, '0');
+        const loc = sampleLocations[Math.floor(Math.random() * sampleLocations.length)];
+        const catKeys = Object.keys(sampleCategories);
+        const category = catKeys[Math.floor(Math.random() * catKeys.length)];
+        const subCatList = sampleCategories[category];
+        const subCategory = subCatList[Math.floor(Math.random() * subCatList.length)];
+        
+        const sales = Math.round((Math.random() * 400 + 20) * 100) / 100;
+        const profit = Math.round((sales * (Math.random() * 0.4 - 0.05)) * 100) / 100;
+        const quantity = Math.floor(Math.random() * 8) + 1;
+
+        generated.push({
+          orderId: `CA-${year}-${1000 + i}`,
+          orderDate: new Date(`${year}-${monthStr}-15`),
+          year: year,
+          yearMonth: `${year}-${monthStr}`,
+          country: loc.country,
+          state: loc.state,
+          city: loc.city,
+          segment: sampleSegments[Math.floor(Math.random() * sampleSegments.length)],
+          category: category,
+          subCategory: subCategory,
+          productName: `${category} ${subCategory} Item #${i + 1}`,
+          customerId: `CUST-${100 + (i % 30)}`,
+          sales: sales,
+          quantity: quantity,
+          profit: profit
+        });
+      }
+
+      processParsedData(generated);
+    }
+
+    // Populate Year Filter Dropdown
+    function populateYearDropdown() {
+      const yearSelect = document.getElementById('year-filter');
+      const years = [...new Set(rawData.map(r => r.year))].filter(Boolean).sort();
+      
+      yearSelect.innerHTML = '<option value="All" class="bg-white dark:bg-slate-800">All Years</option>';
+      years.forEach(y => {
+        const opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = y;
+        opt.className = "bg-white dark:bg-slate-800";
+        yearSelect.appendChild(opt);
+      });
+    }
+
+    // Populate Country Filter Dropdown
+    function populateCountryDropdown() {
+      const countrySelect = document.getElementById('country-filter');
+      const countries = [...new Set(rawData.map(r => r.country))].filter(Boolean).sort();
+      
+      countrySelect.innerHTML = '<option value="All" class="bg-white dark:bg-slate-800">All Countries</option>';
+      countries.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = c;
+        opt.className = "bg-white dark:bg-slate-800";
+        countrySelect.appendChild(opt);
+      });
+    }
+
+    function onHeaderCountryChange() {
+      selectedCountry = document.getElementById('country-filter').value;
+      if (selectedCountry === 'All') {
+        geoDrillState = { level: 'country', country: null, state: null };
+      } else {
+        geoDrillState = { level: 'state', country: selectedCountry, state: null };
+      }
+      applyFilters();
+    }
+
+    function switchSection(section) {
+      currentSection = section;
+
+      const salesSec = document.getElementById('sales-section');
+      const prodSec = document.getElementById('product-section');
+      const subtitle = document.getElementById('section-subtitle');
+
+      const navSales = document.getElementById('nav-sales');
+      const navProd = document.getElementById('nav-product');
+
+      if (section === 'sales') {
+        salesSec.classList.remove('hidden');
+        prodSec.classList.add('hidden');
+        subtitle.textContent = "Sales Overview & Analytics";
+
+        navSales.className = "nav-btn group relative flex items-center justify-center p-3 rounded-xl transition-all text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-slate-700/70";
+        navProd.className = "nav-btn group relative flex items-center justify-center p-3 rounded-xl transition-all text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/50";
+      } else {
+        salesSec.classList.add('hidden');
+        prodSec.classList.remove('hidden');
+        subtitle.textContent = "Product Performance & Inventory";
+
+        navSales.className = "nav-btn group relative flex items-center justify-center p-3 rounded-xl transition-all text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/50";
+        navProd.className = "nav-btn group relative flex items-center justify-center p-3 rounded-xl transition-all text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-slate-700/70";
+      }
+
+      // Re-render charts for appropriate section
+      updateAllCharts();
+    }
+
+    // Filter Application Trigger with Multi-chart Cross-filtering
+    function applyFilters() {
+      selectedYear = document.getElementById('year-filter').value;
+      const countryFilterElem = document.getElementById('country-filter');
+      if (countryFilterElem.value !== selectedCountry) {
+        countryFilterElem.value = selectedCountry;
+      }
+      
+      filteredData = rawData.filter(r => {
+        // Year filter
+        if (selectedYear !== 'All' && r.year !== selectedYear) return false;
+        
+        // Country filter
+        if (selectedCountry !== 'All' && r.country !== selectedCountry) return false;
+        
+        // Segment filter
+        if (selectedSegment !== 'All' && r.segment !== selectedSegment) return false;
+
+        // Category filter
+        if (selectedCategory !== 'All' && r.category !== selectedCategory) return false;
+
+        // SubCategory filter
+        if (selectedSubCategory !== 'All' && r.subCategory !== selectedSubCategory) return false;
+
+        // Time Period filter (from chart clicks)
+        if (selectedTimePeriod !== 'All') {
+          if (selectedTimePeriod.includes('-')) {
+            if (r.yearMonth !== selectedTimePeriod) return false;
+          } else {
+            if (r.year !== selectedTimePeriod) return false;
+          }
+        }
+
+        return true;
+      });
+
+      // Update Filter Bar UI
+      renderActiveFilterChips();
+
+      // Update KPIs & Charts
+      updateSalesKPIs();
+      updateProductKPIs();
+      updateAllCharts();
+      renderProductTable();
+    }
+
+    function renderActiveFilterChips() {
+      const container = document.getElementById('filter-chips-container');
+      const bar = document.getElementById('active-filters-bar');
+      if (!container || !bar) return;
+
+      const chips = [];
+
+      if (selectedCountry !== 'All') {
+        chips.push({ label: `Country: ${selectedCountry}`, clear: () => { selectedCountry = 'All'; document.getElementById('country-filter').value = 'All'; geoDrillState = { level: 'country', country: null, state: null }; } });
+      }
+      if (selectedYear !== 'All') {
+        chips.push({ label: `Year: ${selectedYear}`, clear: () => { selectedYear = 'All'; document.getElementById('year-filter').value = 'All'; } });
+      }
+      if (selectedSegment !== 'All') {
+        chips.push({ label: `Segment: ${selectedSegment}`, clear: () => { selectedSegment = 'All'; } });
+      }
+      if (selectedCategory !== 'All') {
+        chips.push({ label: `Category: ${selectedCategory}`, clear: () => { selectedCategory = 'All'; catDrillState = { level: 'category', category: null }; } });
+      }
+      if (selectedSubCategory !== 'All') {
+        chips.push({ label: `Sub-Cat: ${selectedSubCategory}`, clear: () => { selectedSubCategory = 'All'; } });
+      }
+      if (selectedTimePeriod !== 'All') {
+        chips.push({ label: `Time: ${selectedTimePeriod}`, clear: () => { selectedTimePeriod = 'All'; } });
+      }
+
+      if (chips.length === 0) {
+        bar.classList.add('hidden');
+        container.innerHTML = '';
+      } else {
+        bar.classList.remove('hidden');
+        container.innerHTML = '';
+        chips.forEach((chip, index) => {
+          const chipElem = document.createElement('div');
+          chipElem.className = "flex items-center gap-1.5 px-2.5 py-1 bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-300 text-xs font-semibold rounded-lg border border-blue-200 dark:border-slate-600 shadow-sm";
+          chipElem.innerHTML = `
+            <span>${chip.label}</span>
+            <button class="hover:text-rose-500 transition-colors ml-1" title="Remove filter">
+              <i class="fa-solid fa-xmark text-[10px]"></i>
+            </button>
+          `;
+          chipElem.querySelector('button').onclick = () => {
+            chip.clear();
+            applyFilters();
+          };
+          container.appendChild(chipElem);
+        });
+      }
+    }
+
+    function clearAllFilters() {
+      selectedYear = 'All';
+      selectedCountry = 'All';
+      selectedSegment = 'All';
+      selectedCategory = 'All';
+      selectedSubCategory = 'All';
+      selectedTimePeriod = 'All';
+
+      document.getElementById('year-filter').value = 'All';
+      document.getElementById('country-filter').value = 'All';
+
+      geoDrillState = { level: 'country', country: null, state: null };
+      catDrillState = { level: 'category', category: null };
+
+      applyFilters();
+    }
+
+    function updateSalesKPIs() {
+      const totalSales = filteredData.reduce((acc, r) => acc + r.sales, 0);
+      const totalProfit = filteredData.reduce((acc, r) => acc + r.profit, 0);
+      const uniqueCustomers = new Set(filteredData.map(r => r.customerId)).size;
+      const uniqueOrders = new Set(filteredData.map(r => r.orderId)).size;
+      const margin = totalSales > 0 ? ((totalProfit / totalSales) * 100).toFixed(1) : '0.0';
+
+      document.getElementById('sales-card-total').textContent = formatCurrency(totalSales);
+      document.getElementById('sales-card-profit').textContent = formatCurrency(totalProfit);
+      document.getElementById('sales-card-customers').textContent = uniqueCustomers.toLocaleString();
+      document.getElementById('sales-card-orders').textContent = uniqueOrders.toLocaleString();
+      
+      const marginElem = document.getElementById('sales-profit-margin');
+      marginElem.textContent = `Margin: ${margin}%`;
+      if (parseFloat(margin) < 0) {
+        marginElem.className = "text-[11px] text-rose-600 dark:text-rose-400 font-medium flex items-center gap-1 mt-1";
+      } else {
+        marginElem.className = "text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 mt-1";
+      }
+    }
+
+    function updateProductKPIs() {
+      const uniqueProducts = new Set(filteredData.map(r => r.productName)).size;
+      const totalQty = filteredData.reduce((acc, r) => acc + r.quantity, 0);
+      const totalProfit = filteredData.reduce((acc, r) => acc + r.profit, 0);
+      const avgProfitPerUnit = totalQty > 0 ? (totalProfit / totalQty) : 0;
+
+      // Find top Category by sales
+      const catSalesMap = {};
+      filteredData.forEach(r => {
+        catSalesMap[r.category] = (catSalesMap[r.category] || 0) + r.sales;
+      });
+      let topCat = '-';
+      let topCatSales = 0;
+      Object.entries(catSalesMap).forEach(([cat, val]) => {
+        if (val > topCatSales) {
+          topCatSales = val;
+          topCat = cat;
+        }
+      });
+
+      document.getElementById('product-card-unique').textContent = uniqueProducts.toLocaleString();
+      document.getElementById('product-card-qty').textContent = totalQty.toLocaleString();
+      document.getElementById('product-card-top-cat').textContent = topCat;
+      document.getElementById('product-card-top-cat-sales').textContent = `${formatCurrency(topCatSales)} Sales`;
+      document.getElementById('product-card-avg-profit').textContent = formatCurrency(avgProfitPerUnit);
+    }
+
+    // Helper: Currency Formatter
+    function formatCurrency(val) {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0
+      }).format(val);
+    }
+
+    function updateAllCharts() {
+      if (currentSection === 'sales') {
+        renderGeoSalesChart();
+        renderSegmentChart();
+        renderSalesTimeChart();
+      } else {
+        renderProductCategoryChart();
+        renderProductQuantityChart();
+      }
+    }
+
+    // Helper: Chart Theme Config
+    function getChartThemeColors() {
+      const isDark = document.documentElement.classList.contains('dark');
+      return {
+        textColor: isDark ? '#94a3b8' : '#64748b',
+        gridColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'
+      };
+    }
+
+    function renderGeoSalesChart() {
+      const ctx = document.getElementById('chart-sales-geo').getContext('2d');
+      const { textColor, gridColor } = getChartThemeColors();
+
+      // Determine dataset scope based on drilldown state
+      let dataSet = filteredData;
+      let groupKey = 'country';
+      let titleText = 'Sales by Country';
+      let breadcrumbText = 'Country View';
+
+      if (geoDrillState.level === 'state') {
+        dataSet = filteredData.filter(r => r.country === geoDrillState.country);
+        groupKey = 'state';
+        titleText = `Sales by State (${geoDrillState.country})`;
+        breadcrumbText = `Country: ${geoDrillState.country}`;
+      } else if (geoDrillState.level === 'city') {
+        dataSet = filteredData.filter(r => r.country === geoDrillState.country && r.state === geoDrillState.state);
+        groupKey = 'city';
+        titleText = `Sales by City (${geoDrillState.state}, ${geoDrillState.country})`;
+        breadcrumbText = `${geoDrillState.country} > ${geoDrillState.state}`;
+      }
+
+      document.getElementById('geo-chart-title').textContent = titleText;
+      document.getElementById('geo-breadcrumb').textContent = breadcrumbText;
+      
+      const resetBtn = document.getElementById('geo-reset-btn');
+      if (geoDrillState.level !== 'country') {
+        resetBtn.classList.remove('hidden');
+      } else {
+        resetBtn.classList.add('hidden');
+      }
+
+      // Aggregate sales
+      const salesMap = {};
+      dataSet.forEach(r => {
+        const key = r[groupKey] || 'Other';
+        salesMap[key] = (salesMap[key] || 0) + r.sales;
+      });
+
+      // Sort Top 12 items
+      const sorted = Object.entries(salesMap)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 12);
+
+      const labels = sorted.map(item => item[0]);
+      const values = sorted.map(item => item[1]);
+
+      if (charts.salesGeo) charts.salesGeo.destroy();
+
+      charts.salesGeo = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Sales ($)',
+            data: values,
+            backgroundColor: '#0284c7',
+            hoverBackgroundColor: '#0369a1',
+            borderRadius: 6,
+            borderSkipped: false
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => `Sales: ${formatCurrency(ctx.raw)} (Click to Filter/Drill)`
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: textColor, font: { size: 11 } },
+              grid: { display: false }
+            },
+            y: {
+              ticks: { 
+                color: textColor, 
+                font: { size: 11 },
+                callback: (val) => '$' + (val >= 1000 ? (val/1000).toFixed(0) + 'k' : val)
+              },
+              grid: { color: gridColor }
+            }
+          },
+          onClick: (event, elements) => {
+            if (elements.length > 0) {
+              const clickedIdx = elements[0].index;
+              const selectedLabel = labels[clickedIdx];
+
+              if (geoDrillState.level === 'country') {
+                geoDrillState.level = 'state';
+                geoDrillState.country = selectedLabel;
+                selectedCountry = selectedLabel;
+              } else if (geoDrillState.level === 'state') {
+                geoDrillState.level = 'city';
+                geoDrillState.state = selectedLabel;
+              }
+              // Cross-filter dashboard by selected element
+              applyFilters();
+            }
+          }
+        }
+      });
+    }
+
+    function resetGeoDrilldown() {
+      geoDrillState = { level: 'country', country: null, state: null };
+      selectedCountry = 'All';
+      document.getElementById('country-filter').value = 'All';
+      applyFilters();
+    }
+
+    function renderSegmentChart() {
+      const ctx = document.getElementById('chart-sales-segment').getContext('2d');
+      const { textColor } = getChartThemeColors();
+
+      const segMap = {};
+      filteredData.forEach(r => {
+        segMap[r.segment] = (segMap[r.segment] || 0) + r.sales;
+      });
+
+      const labels = Object.keys(segMap);
+      const values = Object.values(segMap);
+
+      // Highlight selected segment slice if active
+      const borderColors = labels.map(l => (l === selectedSegment) ? '#0284c7' : (document.documentElement.classList.contains('dark') ? '#1e293b' : '#ffffff'));
+      const borderWidths = labels.map(l => (l === selectedSegment) ? 4 : 2);
+
+      if (charts.salesSegment) charts.salesSegment.destroy();
+
+      charts.salesSegment = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: values,
+            backgroundColor: PALETTE,
+            borderWidth: borderWidths,
+            borderColor: borderColors
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { color: textColor, padding: 15, font: { size: 11 } }
+            },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => ` ${ctx.label}: ${formatCurrency(ctx.raw)} (Click to filter)`
+              }
+            }
+          },
+          cutout: '68%',
+          onClick: (event, elements) => {
+            if (elements.length > 0) {
+              const clickedIdx = elements[0].index;
+              const segmentName = labels[clickedIdx];
+              
+              // Toggle segment cross-filter
+              if (selectedSegment === segmentName) {
+                selectedSegment = 'All';
+              } else {
+                selectedSegment = segmentName;
+              }
+              applyFilters();
+            }
+          }
+        }
+      });
+    }
+
+    function setSalesTimeframe(tf) {
+      salesTimeframe = tf;
+      const btnMonth = document.getElementById('sales-time-month');
+      const btnYear = document.getElementById('sales-time-year');
+
+      if (tf === 'month') {
+        btnMonth.className = "px-3 py-1.5 rounded-lg font-medium transition-all bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm";
+        btnYear.className = "px-3 py-1.5 rounded-lg font-medium transition-all text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white";
+      } else {
+        btnYear.className = "px-3 py-1.5 rounded-lg font-medium transition-all bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm";
+        btnMonth.className = "px-3 py-1.5 rounded-lg font-medium transition-all text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white";
+      }
+
+      renderSalesTimeChart();
+    }
+
+    function renderSalesTimeChart() {
+      const ctx = document.getElementById('chart-sales-time').getContext('2d');
+      const { textColor, gridColor } = getChartThemeColors();
+
+      const timeMap = {};
+      filteredData.forEach(r => {
+        const key = salesTimeframe === 'month' ? r.yearMonth : r.year;
+        timeMap[key] = (timeMap[key] || 0) + r.sales;
+      });
+
+      const sortedKeys = Object.keys(timeMap).sort();
+      const values = sortedKeys.map(k => timeMap[k]);
+
+      // Format Labels nicely
+      const formattedLabels = sortedKeys.map(k => {
+        if (salesTimeframe === 'month' && k.includes('-')) {
+          const [y, m] = k.split('-');
+          const monthName = new Date(parseInt(y), parseInt(m) - 1, 1).toLocaleString('default', { month: 'short' });
+          return `${monthName} ${y}`;
+        }
+        return k;
+      });
+
+      if (charts.salesTime) charts.salesTime.destroy();
+
+      charts.salesTime = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: formattedLabels,
+          datasets: [{
+            label: 'Sales',
+            data: values,
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            fill: true,
+            tension: 0.35,
+            pointRadius: 4,
+            pointHoverRadius: 7
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => `Sales: ${formatCurrency(ctx.raw)} (Click point to filter timeframe)`
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: textColor, font: { size: 10 }, maxRotation: 45 },
+              grid: { color: gridColor }
+            },
+            y: {
+              ticks: { 
+                color: textColor, 
+                font: { size: 11 },
+                callback: (val) => '$' + (val >= 1000 ? (val/1000).toFixed(0) + 'k' : val)
+              },
+              grid: { color: gridColor }
+            }
+          },
+          onClick: (event, elements) => {
+            if (elements.length > 0) {
+              const clickedIdx = elements[0].index;
+              const rawTimeKey = sortedKeys[clickedIdx];
+              
+              if (selectedTimePeriod === rawTimeKey) {
+                selectedTimePeriod = 'All';
+              } else {
+                selectedTimePeriod = rawTimeKey;
+              }
+              applyFilters();
+            }
+          }
+        }
+      });
+    }
+
+    function renderProductCategoryChart() {
+      const ctx = document.getElementById('chart-product-category').getContext('2d');
+      const { textColor } = getChartThemeColors();
+
+      let dataSet = filteredData;
+      let groupKey = 'category';
+      let titleText = 'Sales by Product Category';
+      let breadcrumbText = 'Category View';
+
+      if (catDrillState.level === 'subCategory') {
+        dataSet = filteredData.filter(r => r.category === catDrillState.category);
+        groupKey = 'subCategory';
+        titleText = `Sub-Category Sales (${catDrillState.category})`;
+        breadcrumbText = `Category: ${catDrillState.category}`;
+      }
+
+      document.getElementById('cat-chart-title').textContent = titleText;
+      document.getElementById('cat-breadcrumb').textContent = breadcrumbText;
+
+      const resetBtn = document.getElementById('cat-reset-btn');
+      if (catDrillState.level !== 'category') {
+        resetBtn.classList.remove('hidden');
+      } else {
+        resetBtn.classList.add('hidden');
+      }
+
+      const catMap = {};
+      dataSet.forEach(r => {
+        const key = r[groupKey] || 'Other';
+        catMap[key] = (catMap[key] || 0) + r.sales;
+      });
+
+      const labels = Object.keys(catMap);
+      const values = Object.values(catMap);
+
+      if (charts.productCategory) charts.productCategory.destroy();
+
+      charts.productCategory = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: values,
+            backgroundColor: PALETTE,
+            borderWidth: 2,
+            borderColor: document.documentElement.classList.contains('dark') ? '#1e293b' : '#ffffff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { color: textColor, padding: 12, font: { size: 11 } }
+            },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => ` ${ctx.label}: ${formatCurrency(ctx.raw)} (Click to filter/drill)`
+              }
+            }
+          },
+          cutout: '65%',
+          onClick: (event, elements) => {
+            if (elements.length > 0) {
+              const clickedIdx = elements[0].index;
+              const selectedLabel = labels[clickedIdx];
+
+              if (catDrillState.level === 'category') {
+                catDrillState.level = 'subCategory';
+                catDrillState.category = selectedLabel;
+                selectedCategory = selectedLabel;
+              } else {
+                selectedSubCategory = selectedLabel;
+              }
+              applyFilters();
+            }
+          }
+        }
+      });
+    }
+
+    function resetCategoryDrilldown() {
+      catDrillState = { level: 'category', category: null };
+      selectedCategory = 'All';
+      selectedSubCategory = 'All';
+      applyFilters();
+    }
+
+    function setQtyTimeframe(tf) {
+      qtyTimeframe = tf;
+      const btnMonth = document.getElementById('qty-time-month');
+      const btnYear = document.getElementById('qty-time-year');
+
+      if (tf === 'month') {
+        btnMonth.className = "px-3 py-1.5 rounded-lg font-medium transition-all bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm";
+        btnYear.className = "px-3 py-1.5 rounded-lg font-medium transition-all text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white";
+      } else {
+        btnYear.className = "px-3 py-1.5 rounded-lg font-medium transition-all bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm";
+        btnMonth.className = "px-3 py-1.5 rounded-lg font-medium transition-all text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white";
+      }
+
+      renderProductQuantityChart();
+    }
+
+    function renderProductQuantityChart() {
+      const ctx = document.getElementById('chart-product-quantity').getContext('2d');
+      const { textColor, gridColor } = getChartThemeColors();
+
+      const qtyMap = {};
+      filteredData.forEach(r => {
+        const key = qtyTimeframe === 'month' ? r.yearMonth : r.year;
+        qtyMap[key] = (qtyMap[key] || 0) + r.quantity;
+      });
+
+      const sortedKeys = Object.keys(qtyMap).sort();
+      const values = sortedKeys.map(k => qtyMap[k]);
+
+      const formattedLabels = sortedKeys.map(k => {
+        if (qtyTimeframe === 'month' && k.includes('-')) {
+          const [y, m] = k.split('-');
+          const monthName = new Date(parseInt(y), parseInt(m) - 1, 1).toLocaleString('default', { month: 'short' });
+          return `${monthName} ${y}`;
+        }
+        return k;
+      });
+
+      if (charts.productQuantity) charts.productQuantity.destroy();
+
+      charts.productQuantity = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: formattedLabels,
+          datasets: [{
+            label: 'Quantity Sold',
+            data: values,
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            fill: true,
+            tension: 0.35,
+            pointRadius: 4,
+            pointHoverRadius: 7
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => `Quantity: ${ctx.raw.toLocaleString()} units (Click point to filter timeframe)`
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: textColor, font: { size: 10 }, maxRotation: 45 },
+              grid: { color: gridColor }
+            },
+            y: {
+              ticks: { color: textColor, font: { size: 11 } },
+              grid: { color: gridColor }
+            }
+          },
+          onClick: (event, elements) => {
+            if (elements.length > 0) {
+              const clickedIdx = elements[0].index;
+              const rawTimeKey = sortedKeys[clickedIdx];
+
+              if (selectedTimePeriod === rawTimeKey) {
+                selectedTimePeriod = 'All';
+              } else {
+                selectedTimePeriod = rawTimeKey;
+              }
+              applyFilters();
+            }
+          }
+        }
+      });
+    }
+
+    function handleProductSearch() {
+      tableSearchQuery = document.getElementById('product-search').value.toLowerCase().trim();
+      tableCurrentPage = 1;
+      renderProductTable();
+    }
+
+    function sortProductTable(col) {
+      if (tableSortColumn === col) {
+        tableSortDirection = tableSortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        tableSortColumn = col;
+        tableSortDirection = 'desc';
+      }
+      
+      // Update sort icons
+      ['name', 'sales', 'quantity', 'profit'].forEach(c => {
+        const icon = document.getElementById(`sort-icon-${c}`);
+        if (icon) {
+          if (c === tableSortColumn) {
+            icon.className = tableSortDirection === 'asc' ? 'fa-solid fa-sort-up text-blue-500 ml-1' : 'fa-solid fa-sort-down text-blue-500 ml-1';
+          } else {
+            icon.className = 'fa-solid fa-sort text-[10px] ml-1 opacity-40';
+          }
+        }
+      });
+
+      renderProductTable();
+    }
+
+    function changeTablePage(delta) {
+      tableCurrentPage += delta;
+      renderProductTable();
+    }
+
+    function renderProductTable() {
+      const tbody = document.getElementById('product-table-body');
+      if (!tbody) return;
+
+      // Group product metrics
+      const productMap = {};
+      filteredData.forEach(r => {
+        const pName = r.productName || 'Unknown Product';
+        if (!productMap[pName]) {
+          productMap[pName] = { name: pName, sales: 0, quantity: 0, profit: 0 };
+        }
+        productMap[pName].sales += r.sales;
+        productMap[pName].quantity += r.quantity;
+        productMap[pName].profit += r.profit;
+      });
+
+      let productsList = Object.values(productMap);
+
+      // Filter by Search Query
+      if (tableSearchQuery) {
+        productsList = productsList.filter(p => p.name.toLowerCase().includes(tableSearchQuery));
+      }
+
+      // Sort Products
+      productsList.sort((a, b) => {
+        let valA = a[tableSortColumn];
+        let valB = b[tableSortColumn];
+
+        if (typeof valA === 'string') {
+          return tableSortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        }
+        return tableSortDirection === 'asc' ? valA - valB : valB - valA;
+      });
+
+      // Pagination
+      const totalEntries = productsList.length;
+      const totalPages = Math.ceil(totalEntries / tablePageSize) || 1;
+      if (tableCurrentPage < 1) tableCurrentPage = 1;
+      if (tableCurrentPage > totalPages) tableCurrentPage = totalPages;
+
+      const startIndex = (tableCurrentPage - 1) * tablePageSize;
+      const paginatedProducts = productsList.slice(startIndex, startIndex + tablePageSize);
+
+      // Render Rows
+      tbody.innerHTML = '';
+      if (paginatedProducts.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-slate-400">No matching products found</td></tr>`;
+      } else {
+        paginatedProducts.forEach(p => {
+          const tr = document.createElement('tr');
+          tr.className = "hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors border-b border-slate-100 dark:border-slate-700/40";
+
+          const profitClass = p.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400';
+
+          tr.innerHTML = `
+            <td class="px-4 py-3 font-medium text-slate-800 dark:text-slate-200 max-w-xs truncate" title="${p.name}">
+              ${p.name}
+            </td>
+            <td class="px-4 py-3 text-right font-semibold text-slate-800 dark:text-slate-200">
+              ${formatCurrency(p.sales)}
+            </td>
+            <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300">
+              ${p.quantity.toLocaleString()}
+            </td>
+            <td class="px-4 py-3 text-right font-semibold ${profitClass}">
+              ${formatCurrency(p.profit)}
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      // Update Info & Buttons
+      const endIdx = Math.min(startIndex + tablePageSize, totalEntries);
+      document.getElementById('product-table-info').textContent = 
+        totalEntries > 0 ? `Showing ${startIndex + 1} to ${endIdx} of ${totalEntries} products` : 'No items';
+      
+      document.getElementById('table-page-num').textContent = `Page ${tableCurrentPage} of ${totalPages}`;
+      document.getElementById('btn-prev-page').disabled = tableCurrentPage === 1;
+      document.getElementById('btn-next-page').disabled = tableCurrentPage === totalPages || totalPages === 0;
+    }
+  </script>
+</body>
+</html>
